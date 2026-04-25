@@ -15,7 +15,7 @@
             --surface-light: oklch(99% 0.012 75);
             --ink-primary-light: oklch(22% 0.03 40);
             --ink-secondary-light: oklch(46% 0.035 45);
-            --ink-tertiary-light: oklch(62% 0.03 50);
+            --ink-tertiary-light: oklch(54% 0.035 45);
             --rule-light: oklch(86% 0.025 65);
             --marigold-soft-light: oklch(94% 0.045 60);
 
@@ -115,6 +115,18 @@
             font-feature-settings: "liga" 1, "kern" 1;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Universal keyboard-focus ring for interactive elements */
+        :where(button, [role="tab"], a, summary):focus-visible {
+            outline: 2px solid var(--saffron);
+            outline-offset: 3px;
+            border-radius: 3px;
+        }
+        select:focus-visible,
+        input[type="text"]:focus-visible {
+            outline: 2px solid var(--saffron);
+            outline-offset: 2px;
         }
 
         /* Skip-to-main link — visible only when focused by keyboard */
@@ -567,6 +579,8 @@
             .claim-slot select, .day-claim select { min-width: 160px; width: 100%; }
             .tab-bar { gap: var(--space-md); }
             .day-lead { flex-direction: column; align-items: flex-start; }
+            .me-picker select { min-width: 100px; }
+            .me-picker .me-hint { flex-basis: 100%; }
         }
 
         /* ABC self-claim — opening invocation, not a card */
@@ -655,12 +669,13 @@
             gap: var(--space-xl);
             padding: var(--space-md) 0;
             margin: 0 0 var(--space-xl);
-            background: color-mix(in oklch, var(--bg) 92%, transparent);
-            backdrop-filter: saturate(120%) blur(6px);
-            -webkit-backdrop-filter: saturate(120%) blur(6px);
+            background: var(--bg);
             border-bottom: 1px solid var(--rule);
             overflow-x: auto;
             scrollbar-width: none;
+            /* Edge-fade affordance — hints there's more to scroll on narrow viewports */
+            mask-image: linear-gradient(to right, black 0%, black calc(100% - 24px), transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 24px), transparent 100%);
         }
         .tab-bar::-webkit-scrollbar { display: none; }
         .tab-bar button {
@@ -696,6 +711,102 @@
         @media print {
             .tab-bar { display: none !important; }
         }
+
+        /* CSS-only tab filtering — body class controls visibility, no JS iteration needed */
+        body.filter-swapnil .task-item:not([data-default-claim="Swapnil"]),
+        body.filter-wim .task-item:not([data-fixed-claim="Wim"]),
+        body.filter-open .task-item[data-default-claim="Swapnil"],
+        body.filter-open .task-item[data-fixed-claim="Wim"],
+        body.filter-mine .task-item:not(.mine-match) {
+            display: none;
+        }
+        /* On any filtered view, hide ABC-wide elements that don't belong */
+        body:not(.filter-all) .day-lead,
+        body:not(.filter-all) .ornament,
+        body:not(.filter-all) .phase-section[data-reference] {
+            display: none;
+        }
+        /* Collapse subsections + phase-sections that have no visible tasks (uses :has()) */
+        body.filter-swapnil .subsection:not(:has(.task-item[data-default-claim="Swapnil"])),
+        body.filter-swapnil .phase-section:not(:has(.task-item[data-default-claim="Swapnil"])),
+        body.filter-wim .subsection:not(:has(.task-item[data-fixed-claim="Wim"])),
+        body.filter-wim .phase-section:not(:has(.task-item[data-fixed-claim="Wim"])),
+        body.filter-open .subsection:not(:has(.task-item:not([data-default-claim="Swapnil"]):not([data-fixed-claim="Wim"]))),
+        body.filter-open .phase-section:not(:has(.task-item:not([data-default-claim="Swapnil"]):not([data-fixed-claim="Wim"]))),
+        body.filter-mine .subsection:not(:has(.task-item.mine-match)),
+        body.filter-mine .phase-section:not(:has(.task-item.mine-match)) {
+            display: none;
+        }
+
+        /* Identity picker — shown in the abc-roster */
+        .me-picker {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            flex-wrap: wrap;
+            row-gap: 6px;
+            margin-top: var(--space-md);
+            font-family: 'Karma', serif;
+            font-size: var(--text-sm);
+            color: var(--ink-secondary);
+        }
+        .me-picker .me-label {
+            font-weight: 600;
+            font-size: var(--text-xs);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--marigold);
+        }
+        .me-picker select {
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent;
+            color: var(--ink-primary);
+            border: none;
+            border-bottom: 1px solid var(--rule);
+            padding: 3px 22px 4px 4px;
+            font-size: var(--text-sm);
+            font-family: 'Karma', serif;
+            font-weight: 600;
+            min-width: 140px;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%239a7a5c' stroke-width='1.25'><path d='M1 1l4 4 4-4'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 4px center;
+            background-size: 9px;
+        }
+        .me-picker select:focus {
+            outline: none;
+            border-bottom-color: var(--marigold);
+        }
+        .me-picker select.is-set { color: var(--marigold); border-bottom-color: var(--marigold); }
+        .me-picker .me-hint {
+            font-style: italic;
+            color: var(--ink-tertiary);
+            font-size: var(--text-xs);
+        }
+
+        /* Inline notice when "Mine" is clicked without identity set */
+        .tab-mine-hint {
+            display: none;
+            margin: -8px 0 var(--space-md);
+            padding: 10px 14px;
+            background: var(--marigold-soft);
+            border-radius: 3px;
+            font-family: 'Karma', serif;
+            font-size: var(--text-sm);
+            font-style: italic;
+            color: var(--ink-primary);
+        }
+        .tab-mine-hint.show {
+            display: block;
+            animation: hint-in 220ms cubic-bezier(0.33, 1, 0.68, 1);
+        }
+        @keyframes hint-in {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media print { .tab-mine-hint { display: none !important; } }
 
         /* Day-level lead — appears below each day's heading */
         .day-lead {
@@ -858,6 +969,16 @@
             letter-spacing: 0.18em;
             text-transform: uppercase;
             color: var(--marigold);
+        }
+        .day-claim .day-time {
+            font-family: 'Karma', serif;
+            font-weight: 500;
+            font-size: var(--text-sm);
+            color: var(--ink-secondary);
+            margin-left: 6px;
+            margin-right: 4px;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.01em;
         }
         .day-claim select {
             appearance: none;
@@ -1045,7 +1166,7 @@
             <div class="header-wrapper">
                 <div class="header-content">
                     <h1>Festival<br>Programme</h1>
-                    <p class="subtitle">Master coordination for the third edition — workshops, gala, artist triage, and everything in between.</p>
+                    <p class="subtitle">Master coordination for the fourth edition — workshops, gala, artist triage, and everything in between.</p>
                     <p class="dateline">May 1 – 3 &nbsp;·&nbsp; Shoonya Dance Centre &nbsp;·&nbsp; Stapelplein 41, 9000 Gent</p>
                 </div>
                 <button class="theme-toggle" onclick="toggleTheme()" type="button"
@@ -1064,6 +1185,13 @@
             <h3>A self-claimed board</h3>
             <p>No one assigns. Pick any task and sign your name on the line — your claim syncs live to everyone else. Multiple takers welcome; the second line is for a teammate. Renames are gated by PIN.</p>
             <p class="roster-names">Swapnil · Narcisse · Sara · Svetlana · Chiara · Kaushika · Laurien · Khushboo · Shreya · Roshni · Haike · Maha</p>
+            <div class="me-picker">
+                <label class="me-label" for="me-select">I am</label>
+                <select id="me-select" aria-label="Pick your name to see your tasks">
+                    <option value="">— pick your name —</option>
+                </select>
+                <span class="me-hint">enables the "Mine" tab</span>
+            </div>
         </section>
         <div class="sync-status" id="sync-status"><span class="dot"></span><span id="sync-status-text">Connecting…</span></div>
         <button class="edit-toggle" id="edit-toggle" type="button">✒&nbsp;&nbsp;<span id="edit-toggle-text">Edit</span></button>
@@ -1071,16 +1199,64 @@
 
         <nav class="tab-bar" role="tablist" aria-label="Filter tasks by owner">
             <button type="button" class="active" data-tab="all" role="tab" aria-selected="true">All <span class="count" data-count-for="all">—</span></button>
+            <button type="button" data-tab="mine" role="tab" aria-selected="false">Mine <span class="count" data-count-for="mine">—</span></button>
             <button type="button" data-tab="swapnil" role="tab" aria-selected="false">Swapnil <span class="count" data-count-for="swapnil">—</span></button>
             <button type="button" data-tab="wim" role="tab" aria-selected="false">Wim <span class="count" data-count-for="wim">—</span></button>
             <button type="button" data-tab="open" role="tab" aria-selected="false">Open <span class="count" data-count-for="open">—</span></button>
         </nav>
+        <div class="tab-mine-hint" id="tab-mine-hint" role="status" aria-live="polite">↑ Pick your name in the "I am" dropdown above to see your tasks here.</div>
 
         <!-- PRE-FESTIVAL -->
         <div class="phase-section">
             <span class="phase-label">Phase 1</span>
-            <h2>Pre-Festival & Logistics</h2>
-            <p style="color: var(--text-secondary); margin-bottom: var(--space-lg);">Complete before May 1st</p>
+            <h2>Pre-Festival &amp; Logistics</h2>
+            <p style="color: var(--ink-secondary); margin-bottom: var(--space-lg);">Complete before May 1st</p>
+
+            <div class="subsection">
+                <div class="task-group-title">Countdown — key milestones</div>
+                <ul class="task-list">
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
+                            <span class="task-meta">T-7 · Fri Apr 24</span>
+                            <span class="task-text">Lists locked &amp; shared with ABC</span>
+                            <span class="task-detail">All category leads have their filled-in task lists; tracker shared with the team.</span>
+                        </div>
+                    </li>
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
+                            <span class="task-meta">T-5 · Sun Apr 26</span>
+                            <span class="task-text">Headcount, music files, arrival sheet locked</span>
+                            <span class="task-detail">Final teacher + ABC + visiting-artist headcount per day; performer music collected on USB; master arrival sheet (flights, ETA, pickups) compiled.</span>
+                        </div>
+                    </li>
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
+                            <span class="task-meta">T-3 · Tue Apr 28</span>
+                            <span class="task-text">Welcome kits packed, signage printed, transport confirmed</span>
+                            <span class="task-detail">Teacher + participant welcome packets ready; all signs printed (no lamination); airport pickups + hotel↔venue transport confirmed.</span>
+                        </div>
+                    </li>
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
+                            <span class="task-meta">T-1 · Thu Apr 30</span>
+                            <span class="task-text">Venue setup day &amp; dress rehearsal prep</span>
+                            <span class="task-detail">Decor + signage installed at Shoonya; tech check; backstage walked; dress rehearsal prep done.</span>
+                        </div>
+                    </li>
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
+                            <span class="task-meta">T-0 · Fri May 1</span>
+                            <span class="task-text">Doors open · Standup at 8:00 AM</span>
+                            <span class="task-detail">Festival is live. Daily standup at 8:00 each morning of the festival.</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
 
             <div class="subsection">
                 <div class="task-group-title">🎁 Gifts & Certificates</div>
@@ -1120,8 +1296,9 @@
                     <li class="task-item">
                         <input type="checkbox" onchange="updateProgress()">
                         <div class="task-content">
+                            <span class="task-meta">Friday late night <span class="people">· any ABC</span></span>
                             <span class="task-text">Print &amp; laminate Opening Party winner certificates</span>
-                            <span class="task-detail">Print the designs once Swapnil has them ready, then laminate. Open to any ABC member.</span>
+                            <span class="task-detail">Print the designs once Swapnil has them ready, then laminate.</span>
                         </div>
                     </li>
                 </ul>
@@ -1134,7 +1311,7 @@
                         <input type="checkbox" onchange="updateProgress()">
                         <div class="task-content">
                             <span class="task-text">Put up all signage around the dance centre</span>
-                            <span class="task-detail">Workshop signs, Opening Party signs (Friday), then take those down and hang changing-room signs for Saturday. Laminate everything in advance.</span>
+                            <span class="task-detail">Workshop signs, Opening Party signs (Friday), then take those down and hang changing-room signs for Saturday.</span>
                         </div>
                     </li>
                     <li class="task-item">
@@ -1189,6 +1366,7 @@
                     <li class="task-item" data-default-claim="Swapnil">
                         <input type="checkbox" onchange="updateProgress()">
                         <div class="task-content">
+                            <span class="task-meta">Saturday morning <span class="people">· Swapnil</span></span>
                             <span class="task-text">Print multiple copies — Gala show order</span>
                             <span class="task-detail">For emcee, backstage manager, tech, and green room.</span>
                         </div>
@@ -1266,32 +1444,36 @@
             <p style="color: var(--text-secondary); margin-bottom: var(--space-lg);">Happen every day</p>
 
             <ul class="task-list">
-                <li class="task-item" data-per-day="Fri,Sat,Sun">
+                <li class="task-item" data-per-day="Fri,Sat,Sun"
+                    data-times-fri="11:30 onwards" data-times-sat="from 08:30" data-times-sun="from 09:00">
                     <input type="checkbox" onchange="updateProgress()">
                     <div class="task-content">
                         <span class="task-text">Registration &amp; Vouchers</span>
-                        <span class="task-detail">Staff desk daily for check-ins, hand out wristbands, distribute drinks and food vouchers. Sign up per day.</span>
+                        <span class="task-detail">Desk for check-ins, wristbands, drink &amp; food vouchers.</span>
                     </div>
                 </li>
-                <li class="task-item" data-per-day="Fri,Sat,Sun">
+                <li class="task-item" data-per-day="Fri,Sat,Sun"
+                    data-times-fri="16:30–17:00" data-times-sat="15:00–15:20" data-times-sun="15:30–15:50">
                     <input type="checkbox" onchange="updateProgress()">
                     <div class="task-content">
                         <span class="task-text">"Spill the Chai"</span>
-                        <span class="task-detail">Make &amp; serve chai at the bar before each break. Different person each day.</span>
+                        <span class="task-detail">Make &amp; serve chai at the bar before each afternoon break.</span>
                     </div>
                 </li>
-                <li class="task-item" data-per-day="Sat,Sun">
+                <li class="task-item" data-per-day="Sat,Sun"
+                    data-times-sat="from 08:00" data-times-sun="from 08:30">
                     <input type="checkbox" onchange="updateProgress()">
                     <div class="task-content">
                         <span class="task-text">Studio Prep — Rise &amp; Riyaaz</span>
-                        <span class="task-detail">Set up the Ananta studio each morning with a calm ambiance (Sat + Sun only — no Friday R&amp;R).</span>
+                        <span class="task-detail">Set up the Ananta studio with a calm ambiance before R&amp;R starts (Sat + Sun only — no Friday R&amp;R).</span>
                     </div>
                 </li>
-                <li class="task-item" data-per-day="Fri,Sat,Sun">
+                <li class="task-item" data-per-day="Fri,Sat,Sun"
+                    data-times-fri="late night" data-times-sat="22:00+" data-times-sun="evening">
                     <input type="checkbox" onchange="updateProgress()">
                     <div class="task-content">
                         <span class="task-text">End-of-day cleaning</span>
-                        <span class="task-detail">Swiffer / swipe all dance floors at the end of every day.</span>
+                        <span class="task-detail">Swiffer / swipe all dance floors at the end of each day.</span>
                     </div>
                 </li>
             </ul>
@@ -1652,7 +1834,7 @@
                     <li class="task-item">
                         <input type="checkbox" onchange="updateProgress()">
                         <div class="task-content">
-                            <span class="task-meta">16:50–20:00 <span class="people">· 3–4 ppl</span></span>
+                            <span class="task-meta">lunch break <span class="people">· 3–4 ppl</span></span>
                             <span class="task-text">Showcase transition crew</span>
                             <span class="task-detail">Move mirrors backstage, clean the floor, move workshop stage, open the tribune. This is the big turnaround.</span>
                         </div>
@@ -1668,7 +1850,7 @@
                     <li class="task-item">
                         <input type="checkbox" onchange="updateProgress()">
                         <div class="task-content">
-                            <span class="task-meta">before showcase <span class="people">· 2 ppl</span></span>
+                            <span class="task-meta">lunch break <span class="people">· 2 ppl</span></span>
                             <span class="task-text">Open tiered seating in tribune &amp; flip down every seat</span>
                             <span class="task-detail">Pull out the theatre tribune, flip every seat down, ready for the audience.</span>
                         </div>
@@ -1711,6 +1893,14 @@
                             <span class="task-meta">before showcase <span class="people">· 1 pp</span></span>
                             <span class="task-text">Student-performer changing room — snacks &amp; water</span>
                             <span class="task-detail">Place pre-bought snacks &amp; water in the changing room (see FW-080).</span>
+                        </div>
+                    </li>
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
+                            <span class="task-meta">before showcase <span class="people">· 1 pp</span></span>
+                            <span class="task-text">Teacher changing room — Studio Ananta</span>
+                            <span class="task-detail">Set up the teacher changing room in Ananta: water, snacks, mirrors, costume rack, hangers. Calm, ready for the guest teachers' arrival.</span>
                         </div>
                     </li>
                 </ul>
@@ -1939,7 +2129,7 @@
         </div>
 
         <!-- FESTIVAL PROGRAM -->
-        <div class="phase-section">
+        <div class="phase-section" data-reference="true">
             <span class="phase-label">Reference</span>
             <h2>Festival Program</h2>
             <p style="color: var(--text-secondary); margin-bottom: var(--space-lg);">Organized by location & studio</p>
@@ -2154,8 +2344,8 @@
         // 2) In SQL editor, run the schema from SETUP.md
         // 3) Project Settings → API → copy Project URL + anon public key
         // =============================================================
-        const SUPABASE_URL = '__PASTE_YOUR_SUPABASE_URL_HERE__';
-        const SUPABASE_ANON_KEY = '__PASTE_YOUR_SUPABASE_ANON_KEY_HERE__';
+        const SUPABASE_URL = 'https://brojstkxqgvtzkgncggy.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyb2pzdGt4cWd2dHprZ25jZ2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwOTQ3NzMsImV4cCI6MjA5MjY3MDc3M30.OwHmE2awvqG1ffyXUpy5CUvLPBYzQHgJisLAlE6Hl4U';
 
         // Edit code — share with trusted people who can edit task text.
         // Anyone with this code can rename tasks. Change it if compromised.
@@ -2217,6 +2407,9 @@
             if (primary || extra) cache[taskId] = { primary, extra };
             else delete cache[taskId];
             localStorage.setItem('gidf-claims', JSON.stringify(cache));
+
+            // Refresh "Mine" match for this task only (scoped — not the full sweep)
+            try { refreshOneTask(taskId); } catch (e) {}
 
             if (!sb) return;
             try {
@@ -2518,6 +2711,8 @@
                 }
                 if (extra) extra.value = payload.new.extra_name || '';
             }
+            // Refresh mine match for this task only (scoped)
+            try { refreshOneTask(row.task_id); } catch (e) {}
         }
 
         // Ornamental dividers between phase-sections
@@ -2535,9 +2730,10 @@
             });
         }
 
-        function buildPerDayClaims(baseTaskId, claims, days) {
+        function buildPerDayClaims(baseTaskId, claims, days, times) {
             const group = document.createElement('div');
             group.className = 'claim-slot claim-slot-group';
+            times = times || {};
 
             days.forEach(day => {
                 const dayKey = day.toLowerCase().slice(0, 3);
@@ -2554,10 +2750,18 @@
                 labelEl.setAttribute('for', selectId);
                 row.appendChild(labelEl);
 
+                // Optional per-day time, shown right after the day label
+                if (times[day]) {
+                    const timeEl = document.createElement('span');
+                    timeEl.className = 'day-time';
+                    timeEl.textContent = times[day];
+                    row.appendChild(timeEl);
+                }
+
                 const select = document.createElement('select');
                 select.id = selectId;
-                select.setAttribute('aria-label', `Claim ${day}`);
-                select.innerHTML = '<option value="">— sign —</option>' +
+                select.setAttribute('aria-label', `Claim ${day}${times[day] ? ' ' + times[day] : ''}`);
+                select.innerHTML = '<option value="">— me! —</option>' +
                     ABC_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
                 select.value = claims[taskId]?.primary || '';
                 if (select.value) select.classList.add('is-filled');
@@ -2599,7 +2803,7 @@
                 select = document.createElement('select');
                 select.id = selectId;
                 select.setAttribute('aria-label', `Claim this task`);
-                select.innerHTML = '<option value="">— sign here —</option>' +
+                select.innerHTML = '<option value="">— I\'ll take this —</option>' +
                     ABC_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
                 const savedPrimary = savedClaim?.primary;
                 select.value = savedPrimary || opts.defaultClaim || '';
@@ -2636,6 +2840,8 @@
                 };
             }
             extra.oninput = () => {
+                // Instant Mine match update on every keystroke (lightweight, scoped to one task)
+                try { refreshOneTask(slot.closest('.task-item')); } catch (e) {}
                 clearTimeout(timer);
                 timer = setTimeout(commit, 400);
             };
@@ -2726,7 +2932,12 @@
                 let slot;
                 if (perDay) {
                     const days = perDay.split(',').map(s => s.trim()).filter(Boolean);
-                    slot = buildPerDayClaims(taskId, claims, days);
+                    const times = {
+                        Fri: item.dataset.timesFri || '',
+                        Sat: item.dataset.timesSat || '',
+                        Sun: item.dataset.timesSun || ''
+                    };
+                    slot = buildPerDayClaims(taskId, claims, days, times);
                 } else {
                     slot = buildClaimSlot(taskId, claims[taskId], {
                         defaultClaim,
@@ -2762,9 +2973,42 @@
                 else enterEditMode();
             });
 
+            // Populate the identity picker with ABC names + Wim
+            const meSelect = document.getElementById('me-select');
+            if (meSelect) {
+                [...ABC_NAMES, 'Wim'].forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n; opt.textContent = n;
+                    meSelect.appendChild(opt);
+                });
+                meSelect.value = getMe();
+                if (meSelect.value) meSelect.classList.add('is-set');
+                meSelect.addEventListener('change', () => {
+                    setMe(meSelect.value);
+                    if (meSelect.value) {
+                        meSelect.classList.add('is-set');
+                        document.getElementById('tab-mine-hint')?.classList.remove('show');
+                    } else {
+                        meSelect.classList.remove('is-set');
+                    }
+                });
+            }
+
+            // Initial mine-match calculation
+            refreshMineMatches();
+
             // Wire filter tabs
             document.querySelectorAll('.tab-bar button').forEach(btn => {
-                btn.addEventListener('click', () => applyTabFilter(btn.dataset.tab));
+                btn.addEventListener('click', () => {
+                    const hint = document.getElementById('tab-mine-hint');
+                    if (btn.dataset.tab === 'mine' && !getMe()) {
+                        if (hint) hint.classList.add('show');
+                        document.getElementById('me-select')?.focus();
+                        return;
+                    }
+                    if (hint) hint.classList.remove('show');
+                    applyTabFilter(btn.dataset.tab);
+                });
             });
             updateTabCounts();
             applyTabFilter(localStorage.getItem('gidf-tab') || 'all');
@@ -2777,17 +3021,19 @@
             if (tab === 'swapnil') return isSwapnil;
             if (tab === 'wim') return isWim;
             if (tab === 'open') return !isSwapnil && !isWim;
+            if (tab === 'mine') return item.classList.contains('mine-match');
             return true; // 'all'
         }
 
         function updateTabCounts() {
             const tasks = document.querySelectorAll('.task-item');
-            const counts = { all: 0, swapnil: 0, wim: 0, open: 0 };
+            const counts = { all: 0, mine: 0, swapnil: 0, wim: 0, open: 0 };
             tasks.forEach(t => {
                 counts.all++;
                 if (matchesTab(t, 'swapnil')) counts.swapnil++;
                 if (matchesTab(t, 'wim')) counts.wim++;
                 if (matchesTab(t, 'open')) counts.open++;
+                if (matchesTab(t, 'mine')) counts.mine++;
             });
             Object.keys(counts).forEach(k => {
                 const el = document.querySelector(`[data-count-for="${k}"]`);
@@ -2795,52 +3041,70 @@
             });
         }
 
+        // ---------- Identity ("Mine" view) ----------
+        function getMe() { return localStorage.getItem('gidf-me') || ''; }
+        function setMe(name) {
+            if (name) localStorage.setItem('gidf-me', name);
+            else localStorage.removeItem('gidf-me');
+            refreshMineMatches();
+        }
+
+        // Compute current claim names on a task-item: primary select values + fixed-name badges + extra-claim inputs (per-day rows too)
+        function refreshTaskClaims(item) {
+            const names = new Set();
+            // Pre-claims via attributes
+            if (item.dataset.defaultClaim) names.add(item.dataset.defaultClaim);
+            if (item.dataset.fixedClaim) names.add(item.dataset.fixedClaim);
+            // Live values from selects + text inputs
+            item.querySelectorAll('select').forEach(s => { if (s.value) names.add(s.value); });
+            item.querySelectorAll('.fixed-name').forEach(b => { if (b.textContent.trim()) names.add(b.textContent.trim()); });
+            item.querySelectorAll('.extra-claim').forEach(i => {
+                const v = (i.value || '').trim();
+                if (v) v.split(',').forEach(p => { const t = p.trim(); if (t) names.add(t); });
+            });
+            item.dataset.currentClaims = Array.from(names).join('|');
+        }
+
+        function refreshMineMatches() {
+            const me = getMe();
+            document.body.dataset.me = me;
+            document.querySelectorAll('.task-item').forEach(item => {
+                refreshTaskClaims(item);
+                const list = (item.dataset.currentClaims || '').split('|');
+                item.classList.toggle('mine-match', !!me && list.includes(me));
+            });
+            updateTabCounts();
+        }
+
+        // Optimized single-task refresh — used when one specific claim changes.
+        // Scopes work to the affected .task-item only (vs. sweeping all 90).
+        function refreshOneTask(taskIdOrItem) {
+            let item;
+            if (typeof taskIdOrItem === 'string') {
+                const slot = document.querySelector(`[data-task-id="${taskIdOrItem}"]`);
+                item = slot?.closest('.task-item');
+            } else {
+                item = taskIdOrItem;
+            }
+            if (!item) return;
+            refreshTaskClaims(item);
+            const me = getMe();
+            const list = (item.dataset.currentClaims || '').split('|');
+            item.classList.toggle('mine-match', !!me && list.includes(me));
+            updateTabCounts();
+        }
+
         function applyTabFilter(tab) {
+            // Update tab button states (4 elements only)
             document.querySelectorAll('.tab-bar button').forEach(b => {
                 const active = b.dataset.tab === tab;
                 b.classList.toggle('active', active);
                 b.setAttribute('aria-selected', active ? 'true' : 'false');
             });
-
-            // Show/hide task items
-            document.querySelectorAll('.task-item').forEach(item => {
-                item.style.display = matchesTab(item, tab) ? '' : 'none';
-            });
-
-            // Hide subsections with no visible tasks
-            document.querySelectorAll('.subsection').forEach(sub => {
-                const hasVisible = Array.from(sub.querySelectorAll('.task-item'))
-                    .some(t => t.style.display !== 'none');
-                sub.style.display = hasVisible ? '' : 'none';
-            });
-
-            // Hide phase sections with no visible tasks (but keep the Festival Programme reference block on 'all')
-            document.querySelectorAll('.phase-section').forEach(ph => {
-                const label = ph.querySelector('.phase-label');
-                const isReference = label && label.textContent.trim().toLowerCase() === 'reference';
-                if (isReference) {
-                    ph.style.display = (tab === 'all') ? '' : 'none';
-                    return;
-                }
-                const hasVisible = Array.from(ph.querySelectorAll('.task-item'))
-                    .some(t => t.style.display !== 'none');
-                ph.style.display = hasVisible ? '' : 'none';
-            });
-
-            // Hide day-lead banners on filtered tabs (they're ABC-wide, not filtered)
-            document.querySelectorAll('.day-lead').forEach(el => {
-                el.style.display = (tab === 'all') ? '' : 'none';
-            });
-
-            // Hide ornaments next to hidden sections
-            document.querySelectorAll('.ornament').forEach(o => {
-                const next = o.nextElementSibling;
-                const prev = o.previousElementSibling;
-                const nextHidden = next && next.style && next.style.display === 'none';
-                const prevHidden = prev && prev.style && prev.style.display === 'none';
-                o.style.display = (nextHidden || prevHidden) ? 'none' : '';
-            });
-
+            // Single class swap on body — CSS does all the filtering
+            const body = document.body;
+            body.classList.remove('filter-all', 'filter-swapnil', 'filter-wim', 'filter-open');
+            body.classList.add(`filter-${tab}`);
             localStorage.setItem('gidf-tab', tab);
         }
     </script>
