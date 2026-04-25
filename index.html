@@ -1119,6 +1119,15 @@
             outline: 2px solid var(--marigold);
             background: var(--marigold-soft);
         }
+        body.edit-mode .note[data-note-id] .note-text {
+            outline: 1px dashed var(--marigold);
+            outline-offset: 4px;
+            cursor: text;
+        }
+        body.edit-mode .note[data-note-id] .note-text:focus {
+            outline: 2px solid var(--marigold);
+            background: var(--marigold-soft);
+        }
         body.edit-mode .task-item input[type="checkbox"] { pointer-events: none; opacity: 0.35; }
 
         .edit-banner {
@@ -1182,8 +1191,8 @@
         </div>
 
         <section class="abc-roster">
-            <h3>A self-claimed board</h3>
-            <p>No one assigns. Pick any task and sign your name on the line — your claim syncs live to everyone else. Multiple takers welcome; the second line is for a teammate. Renames are gated by PIN.</p>
+            <h3>This is our board 🌸</h3>
+            <p>No one gets assigned here — we all just show up and pick what feels right. See something you can own? Drop your name on the line and it syncs live to the whole team. Doing it with someone? Tag them in the teammate slot. Want to tweak a task name or add a note? Use the PIN — it's in the WhatsApp group.</p>
             <p class="roster-names">Swapnil · Narcisse · Sara · Svetlana · Chiara · Kaushika · Laurien · Khushboo · Shreya · Roshni · Haike · Maha · Siddhy</p>
             <div class="me-picker">
                 <label class="me-label" for="me-select">I am</label>
@@ -1438,7 +1447,7 @@
             </div>
         </div>
 
-        <div class="note">
+        <div class="note" data-note-id="critical-prefestival">
             <div class="note-title">⚡ Critical Pre-Festival Checklist</div>
             <div class="note-text">
                 Setup water stations (Aakash), shoe racks (Art Deco & Ananta), prop storage area, Kalbeliya costume kits, Abhinaya floor seating, and atmospheric touches (dim lights for Rise & Riyaaz, tissues for closing circle).
@@ -2625,6 +2634,13 @@
         function applyRemoteEdit(payload) {
             const row = payload.new || payload.old;
             if (!row) return;
+            // Handle note block edits
+            if (row.task_id && row.task_id.startsWith('note_')) {
+                const noteId = row.task_id.replace('note_', '');
+                const noteText = document.querySelector(`.note[data-note-id="${noteId}"] .note-text`);
+                if (noteText) noteText.textContent = payload.new?.edited_text || noteText.textContent;
+                return;
+            }
             document.querySelectorAll('.task-item').forEach(item => {
                 if (item.dataset.originalHash !== row.task_id) return;
                 const textEl = item.querySelector('.task-text');
@@ -2665,6 +2681,20 @@
                     el.removeEventListener('blur', onEditBlur);
                 }
             });
+            document.querySelectorAll('.note[data-note-id] .note-text').forEach(el => {
+                el.setAttribute('contenteditable', on ? 'true' : 'false');
+                if (on) el.addEventListener('blur', onNoteBlur);
+                else el.removeEventListener('blur', onNoteBlur);
+            });
+        }
+
+        async function onNoteBlur(e) {
+            const el = e.target;
+            const noteDiv = el.closest('.note[data-note-id]');
+            if (!noteDiv) return;
+            const taskId = `note_${noteDiv.dataset.noteId}`;
+            const newText = normalize(el.textContent);
+            await saveEdit(taskId, newText, undefined, undefined);
         }
         async function onEditBlur(e) {
             const el = e.target;
@@ -2860,6 +2890,13 @@
                 loadAllEdits(),
                 loadAllCustomTasks()
             ]);
+
+            // Apply saved edits to note blocks
+            document.querySelectorAll('.note[data-note-id]').forEach(noteDiv => {
+                const taskId = `note_${noteDiv.dataset.noteId}`;
+                const noteText = noteDiv.querySelector('.note-text');
+                if (noteText && edits[taskId]?.text) noteText.textContent = edits[taskId].text;
+            });
 
             // Render admin-added custom tasks into their sections BEFORE claim injection
             customTasks.forEach(ct => {
