@@ -927,24 +927,31 @@
             border-bottom-color: var(--marigold);
         }
         .claim-slot .extra-claim {
+            appearance: none;
+            -webkit-appearance: none;
             background: transparent;
             color: var(--ink-primary);
             border: none;
             border-bottom: 1px dotted var(--rule);
+            padding: 2px 20px 3px 4px;
             font-size: var(--text-sm);
             font-family: 'Karma', serif;
-            font-style: italic;
-            padding: 2px 4px;
-            max-width: 160px;
-        }
-        .claim-slot .extra-claim::placeholder {
-            color: var(--ink-tertiary);
-            opacity: 0.7;
+            min-width: 110px;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%239a7a5c' stroke-width='1.25'><path d='M1 1l4 4 4-4'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 4px center;
+            background-size: 9px;
         }
         .claim-slot .extra-claim:focus {
             outline: none;
-            border-bottom-style: solid;
             border-bottom-color: var(--marigold);
+            border-bottom-style: solid;
+        }
+        .claim-slot .extra-claim.is-filled {
+            color: var(--marigold);
+            border-bottom-color: var(--marigold);
+            border-bottom-style: solid;
         }
 
         /* Per-day claim group — for recurring tasks that need Fri/Sat/Sun claims */
@@ -1145,6 +1152,79 @@
         }
         body.edit-mode .edit-banner { display: block; }
         body.edit-mode { padding-top: 42px; }
+
+        /* Threaded comments per task */
+        .task-comments { margin-top: var(--space-sm); }
+        .comments-toggle {
+            background: none;
+            border: none;
+            font-family: 'Karma', serif;
+            font-size: var(--text-xs);
+            color: var(--ink-tertiary);
+            cursor: pointer;
+            padding: 0;
+            letter-spacing: 0.06em;
+            transition: color 140ms;
+        }
+        .comments-toggle:hover { color: var(--marigold); }
+        .comments-list {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: var(--space-sm);
+            padding-left: var(--space-md);
+            border-left: 1.5px solid var(--rule);
+        }
+        .comments-list.open { display: flex; }
+        .comment-item {
+            font-family: 'Karma', serif;
+            font-size: var(--text-xs);
+            line-height: 1.5;
+            color: var(--ink-primary);
+        }
+        .comment-author {
+            font-weight: 600;
+            color: var(--marigold);
+            margin-right: 4px;
+        }
+        .comment-time {
+            color: var(--ink-tertiary);
+            font-style: italic;
+            margin-right: 6px;
+            font-size: 0.7rem;
+        }
+        .comment-input-row {
+            display: flex;
+            gap: var(--space-sm);
+            align-items: center;
+            margin-top: 2px;
+        }
+        .comment-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            border-bottom: 1px dotted var(--rule);
+            font-family: 'Karma', serif;
+            font-size: var(--text-xs);
+            color: var(--ink-primary);
+            padding: 2px 4px;
+            min-width: 0;
+        }
+        .comment-input::placeholder { color: var(--ink-tertiary); font-style: italic; }
+        .comment-input:focus { outline: none; border-bottom-color: var(--marigold); border-bottom-style: solid; }
+        .comment-send {
+            background: none;
+            border: none;
+            color: var(--marigold);
+            cursor: pointer;
+            font-family: 'Karma', serif;
+            font-size: var(--text-sm);
+            padding: 0 4px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .comment-send:hover { color: var(--saffron-deep); }
+        @media print { .task-comments { display: none !important; } }
 
         @supports (animation: test) {
             .task-item {
@@ -2363,6 +2443,7 @@
 
         const ABC_NAMES = ['Swapnil','Narcisse','Sara','Svetlana','Chiara','Kaushika',
                            'Laurien','Khushboo','Shreya','Roshni','Haike','Maha','Siddhy'];
+        const CLAIM_NAMES = [...ABC_NAMES, 'Wim'];
 
         // Stable task ID from ORIGINAL task text (hash is computed once from HTML source,
         // so edited text still maps to the same ID).
@@ -2450,6 +2531,11 @@
                     { event: '*', schema: 'public', table: 'gidf_custom_tasks' },
                     (payload) => applyRemoteCustomTask(payload))
                 .subscribe();
+            sb.channel('gidf_task_comments_channel')
+                .on('postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'gidf_task_comments' },
+                    (payload) => applyRemoteComment(payload))
+                .subscribe();
         }
 
         // ---------- Custom tasks (admin-added) ----------
@@ -2494,7 +2580,7 @@
             } catch (e) { console.error(e); }
         }
 
-        function renderCustomTask(task, subEl, claims) {
+        function renderCustomTask(task, subEl, claims, allComments) {
             if (!subEl) return;
             const list = subEl.querySelector('.task-list');
             if (!list) return;
@@ -2531,6 +2617,7 @@
 
             const slot = buildClaimSlot(taskHash, (claims && claims[taskHash]) || null, {});
             content.appendChild(slot);
+            content.appendChild(buildCommentThread(taskHash, (allComments && allComments[taskHash]) || []));
 
             const delBtn = document.createElement('button');
             delBtn.className = 'delete-task-btn';
@@ -2787,7 +2874,7 @@
                 select.id = selectId;
                 select.setAttribute('aria-label', `Claim ${day}${times[day] ? ' ' + times[day] : ''}`);
                 select.innerHTML = '<option value="">— me! —</option>' +
-                    ABC_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
+                    CLAIM_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
                 select.value = claims[taskId]?.primary || '';
                 if (select.value) select.classList.add('is-filled');
                 select.onchange = () => {
@@ -2829,7 +2916,7 @@
                 select.id = selectId;
                 select.setAttribute('aria-label', `Claim this task`);
                 select.innerHTML = '<option value="">— I\'ll take this —</option>' +
-                    ABC_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
+                    CLAIM_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
                 const savedPrimary = savedClaim?.primary;
                 select.value = savedPrimary || opts.defaultClaim || '';
                 if (select.value) select.classList.add('is-filled');
@@ -2837,22 +2924,16 @@
                 slot.appendChild(select);
             }
 
-            const plus = document.createElement('span');
-            plus.textContent = '+';
-            plus.setAttribute('aria-hidden', 'true');
-            plus.style.color = 'var(--text-secondary)';
-            slot.appendChild(plus);
-
-            const extra = document.createElement('input');
+            const extra = document.createElement('select');
             extra.id = extraId;
-            extra.type = 'text';
             extra.className = 'extra-claim';
-            extra.placeholder = opts.fixedClaim ? 'ABC teammate (optional)' : 'co-lead (optional)';
             extra.setAttribute('aria-label', opts.fixedClaim ? 'ABC teammate (optional)' : 'Co-lead (optional)');
+            extra.innerHTML = '<option value="">' + (opts.fixedClaim ? '+ teammate' : '+ co-lead') + '</option>' +
+                CLAIM_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
             extra.value = savedClaim?.extra || '';
+            if (extra.value) extra.classList.add('is-filled');
             slot.appendChild(extra);
 
-            let timer;
             const commit = () => {
                 const primary = opts.fixedClaim || (select ? select.value : '');
                 saveClaim(taskId, primary, extra.value);
@@ -2864,11 +2945,11 @@
                     commit();
                 };
             }
-            extra.oninput = () => {
-                // Instant Mine match update on every keystroke (lightweight, scoped to one task)
+            extra.onchange = () => {
+                if (extra.value) extra.classList.add('is-filled');
+                else extra.classList.remove('is-filled');
                 try { refreshOneTask(slot.closest('.task-item')); } catch (e) {}
-                clearTimeout(timer);
-                timer = setTimeout(commit, 400);
+                commit();
             };
 
             // If we applied a default claim (no Supabase row yet), persist it so everyone sees it
@@ -2882,13 +2963,134 @@
             return slot;
         }
 
+        // -------- Threaded comments --------
+        async function loadAllComments() {
+            if (!sb) return {};
+            const { data, error } = await sb.from('gidf_task_comments').select('*').order('created_at');
+            if (error) { console.error(error); return {}; }
+            const grouped = {};
+            data.forEach(c => {
+                if (!grouped[c.task_id]) grouped[c.task_id] = [];
+                grouped[c.task_id].push(c);
+            });
+            return grouped;
+        }
+
+        async function addComment(taskId, body) {
+            const author = getMe();
+            if (!author) { alert('Pick your name in the "I am" dropdown first.'); return null; }
+            if (!sb) { alert('Supabase not configured.'); return null; }
+            const { data, error } = await sb.from('gidf_task_comments')
+                .insert({ task_id: taskId, author, body })
+                .select().single();
+            if (error) { console.error(error); return null; }
+            return data;
+        }
+
+        function formatCommentTime(ts) {
+            const d = new Date(ts);
+            return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) +
+                   ' · ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        }
+
+        function renderComment(c) {
+            const item = document.createElement('div');
+            item.className = 'comment-item';
+            item.dataset.commentId = c.id;
+            const author = document.createElement('span');
+            author.className = 'comment-author';
+            author.textContent = c.author;
+            const time = document.createElement('span');
+            time.className = 'comment-time';
+            time.textContent = formatCommentTime(c.created_at);
+            const body = document.createElement('span');
+            body.className = 'comment-body';
+            body.textContent = c.body;
+            item.appendChild(author);
+            item.appendChild(time);
+            item.appendChild(body);
+            return item;
+        }
+
+        function buildCommentThread(taskId, comments) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'task-comments';
+            wrapper.dataset.commentTaskId = taskId;
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'comments-toggle';
+            toggle.textContent = (comments && comments.length) ? `💬 ${comments.length}` : '💬 comment';
+            wrapper.appendChild(toggle);
+
+            const list = document.createElement('div');
+            list.className = 'comments-list';
+            (comments || []).forEach(c => list.appendChild(renderComment(c)));
+
+            const inputRow = document.createElement('div');
+            inputRow.className = 'comment-input-row';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'comment-input';
+            input.placeholder = 'Add a comment…';
+            input.setAttribute('aria-label', 'Add a comment');
+            const send = document.createElement('button');
+            send.type = 'button';
+            send.className = 'comment-send';
+            send.textContent = '→';
+            send.setAttribute('aria-label', 'Send comment');
+
+            const submitComment = async () => {
+                const body = input.value.trim();
+                if (!body) return;
+                input.disabled = true;
+                const created = await addComment(taskId, body);
+                input.disabled = false;
+                if (created) {
+                    input.value = '';
+                    list.insertBefore(renderComment(created), inputRow);
+                    updateCommentToggle(wrapper, list);
+                    list.classList.add('open');
+                }
+            };
+
+            send.onclick = submitComment;
+            input.onkeydown = e => { if (e.key === 'Enter') submitComment(); };
+            inputRow.appendChild(input);
+            inputRow.appendChild(send);
+            list.appendChild(inputRow);
+            wrapper.appendChild(list);
+            toggle.onclick = () => list.classList.toggle('open');
+            return wrapper;
+        }
+
+        function updateCommentToggle(wrapper, list) {
+            const count = list.querySelectorAll('.comment-item').length;
+            const toggle = wrapper.querySelector('.comments-toggle');
+            if (toggle) toggle.textContent = count ? `💬 ${count}` : '💬 comment';
+        }
+
+        function applyRemoteComment(payload) {
+            if (payload.eventType !== 'INSERT' || !payload.new) return;
+            const c = payload.new;
+            const wrapper = document.querySelector(`.task-comments[data-comment-task-id="${c.task_id}"]`);
+            if (!wrapper) return;
+            const list = wrapper.querySelector('.comments-list');
+            if (!list) return;
+            if (list.querySelector(`[data-comment-id="${c.id}"]`)) return; // already rendered
+            const inputRow = list.querySelector('.comment-input-row');
+            list.insertBefore(renderComment(c), inputRow);
+            updateCommentToggle(wrapper, list);
+        }
+
         async function injectClaimSlots() {
             assignSectionIds();
 
-            const [claims, edits, customTasks] = await Promise.all([
+            const [claims, edits, customTasks, allComments] = await Promise.all([
                 loadAllClaims(),
                 loadAllEdits(),
-                loadAllCustomTasks()
+                loadAllCustomTasks(),
+                loadAllComments()
             ]);
 
             // Apply saved edits to note blocks
@@ -2901,7 +3103,7 @@
             // Render admin-added custom tasks into their sections BEFORE claim injection
             customTasks.forEach(ct => {
                 const sub = document.querySelector(`.subsection[data-section-id="${ct.section_id}"]`);
-                if (sub) renderCustomTask(ct, sub, claims);
+                if (sub) renderCustomTask(ct, sub, claims, allComments);
             });
 
             // Inject "+ Add task" button into every subsection (visible only in edit mode)
@@ -2977,6 +3179,7 @@
                     });
                 }
                 content.appendChild(slot);
+                content.appendChild(buildCommentThread(taskId, allComments[taskId] || []));
             });
         }
 
@@ -3008,7 +3211,7 @@
             // Populate the identity picker with ABC names + Wim
             const meSelect = document.getElementById('me-select');
             if (meSelect) {
-                [...ABC_NAMES, 'Wim'].forEach(n => {
+                CLAIM_NAMES.forEach(n => {
                     const opt = document.createElement('option');
                     opt.value = n; opt.textContent = n;
                     meSelect.appendChild(opt);
