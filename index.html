@@ -717,6 +717,7 @@
         body.filter-wim .task-item:not([data-fixed-claim="Wim"]),
         body.filter-open .task-item[data-default-claim="Swapnil"],
         body.filter-open .task-item[data-fixed-claim="Wim"],
+        body.filter-open .task-item[data-claimed="true"],
         body.filter-mine .task-item:not(.mine-match) {
             display: none;
         }
@@ -731,8 +732,8 @@
         body.filter-swapnil .phase-section:not(:has(.task-item[data-default-claim="Swapnil"])),
         body.filter-wim .subsection:not(:has(.task-item[data-fixed-claim="Wim"])),
         body.filter-wim .phase-section:not(:has(.task-item[data-fixed-claim="Wim"])),
-        body.filter-open .subsection:not(:has(.task-item:not([data-default-claim="Swapnil"]):not([data-fixed-claim="Wim"]))),
-        body.filter-open .phase-section:not(:has(.task-item:not([data-default-claim="Swapnil"]):not([data-fixed-claim="Wim"]))),
+        body.filter-open .subsection:not(:has(.task-item:not([data-default-claim="Swapnil"]):not([data-fixed-claim="Wim"]):not([data-claimed="true"]))),
+        body.filter-open .phase-section:not(:has(.task-item:not([data-default-claim="Swapnil"]):not([data-fixed-claim="Wim"]):not([data-claimed="true"]))),
         body.filter-mine .subsection:not(:has(.task-item.mine-match)),
         body.filter-mine .phase-section:not(:has(.task-item.mine-match)) {
             display: none;
@@ -2839,6 +2840,13 @@
             }
             // Refresh mine match for this task only (scoped)
             try { refreshOneTask(row.task_id); } catch (e) {}
+            // Keep Open tab in sync
+            const parentItem = slot.closest('.task-item');
+            if (parentItem && select && !parentItem.dataset.fixedClaim) {
+                parentItem.dataset.claimed = select.value ? 'true' : 'false';
+                updateTabCounts();
+                applyTabFilter(localStorage.getItem('gidf-tab') || 'all');
+            }
         }
 
         // Ornamental dividers between phase-sections
@@ -2956,6 +2964,12 @@
                 select.onchange = () => {
                     if (select.value) select.classList.add('is-filled');
                     else select.classList.remove('is-filled');
+                    const parentItem = slot.closest('.task-item');
+                    if (parentItem && !parentItem.dataset.fixedClaim) {
+                        parentItem.dataset.claimed = select.value ? 'true' : 'false';
+                        updateTabCounts();
+                        applyTabFilter(localStorage.getItem('gidf-tab') || 'all');
+                    }
                     commit();
                 };
             }
@@ -3177,6 +3191,12 @@
                 const fixedClaim = item.dataset.fixedClaim || '';
                 const perDay = item.dataset.perDay || '';
 
+                // Set initial claimed state for Open tab (based on loaded Supabase data)
+                if (!perDay && !fixedClaim) {
+                    const savedPrimary = claims[taskId]?.primary || defaultClaim;
+                    item.dataset.claimed = savedPrimary ? 'true' : 'false';
+                }
+
                 let slot;
                 if (perDay) {
                     const days = perDay.split(',').map(s => s.trim()).filter(Boolean);
@@ -3269,7 +3289,7 @@
             const isWim = item.dataset.fixedClaim === 'Wim';
             if (tab === 'swapnil') return isSwapnil;
             if (tab === 'wim') return isWim;
-            if (tab === 'open') return !isSwapnil && !isWim;
+            if (tab === 'open') return !isSwapnil && !isWim && item.dataset.claimed !== 'true';
             if (tab === 'mine') return item.classList.contains('mine-match');
             return true; // 'all'
         }
