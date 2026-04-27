@@ -1653,6 +1653,14 @@
                     <li class="task-item">
                         <input type="checkbox" onchange="updateProgress()">
                         <div class="task-content">
+                            <span class="task-meta">12:00–16:00 <span class="people">· 1 pp</span></span>
+                            <span class="task-text">Class monitor — Technique &amp; Tools Lab</span>
+                            <span class="task-detail">Pre-claimed by Swapnil. Manage timing, breaks, packed-lunch flow. · Group photo with Colleena &amp; participants at the end.</span>
+                        </div>
+                    </li>
+                    <li class="task-item">
+                        <input type="checkbox" onchange="updateProgress()">
+                        <div class="task-content">
                             <span class="task-meta">16:00 <span class="people">· 1 pp</span></span>
                             <span class="task-text">Studio setup — Art Deco</span>
                             <span class="task-detail">Place schedules, test mirrors &amp; sound, arrange shoe racks.</span>
@@ -2551,6 +2559,11 @@
                     { event: 'INSERT', schema: 'public', table: 'gidf_task_comments' },
                     (payload) => applyRemoteComment(payload))
                 .subscribe();
+            sb.channel('gidf_task_completions_channel')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'gidf_task_completions' },
+                    (payload) => applyRemoteCompletion(payload))
+                .subscribe();
         }
 
         // ---------- Custom tasks (admin-added) ----------
@@ -2991,6 +3004,50 @@
             return slot;
         }
 
+        // -------- Completion sync --------
+        async function loadAllCompletions() {
+            if (!sb) return {};
+            const { data, error } = await sb.from('gidf_task_completions').select('*');
+            if (error) { console.error(error); return {}; }
+            return data.reduce((acc, row) => { acc[row.task_id] = row; return acc; }, {});
+        }
+
+        async function saveCompletion(taskId, completed) {
+            if (!sb) return;
+            try {
+                if (completed) {
+                    await sb.from('gidf_task_completions').upsert({
+                        task_id: taskId,
+                        completed_by: getMe() || 'unknown',
+                        completed_at: new Date().toISOString()
+                    });
+                } else {
+                    await sb.from('gidf_task_completions').delete().eq('task_id', taskId);
+                }
+            } catch (e) {
+                console.error(e);
+                setSyncStatus('error', 'Completion failed to save');
+            }
+        }
+
+        function applyCompletions(completions) {
+            document.querySelectorAll('.task-item').forEach(item => {
+                const taskId = item.dataset.originalHash;
+                if (!taskId) return;
+                const cb = item.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = !!completions[taskId];
+            });
+        }
+
+        function applyRemoteCompletion(payload) {
+            const row = payload.new || payload.old;
+            if (!row) return;
+            const item = document.querySelector(`.task-item[data-original-hash="${row.task_id}"]`);
+            if (!item) return;
+            const cb = item.querySelector('input[type="checkbox"]');
+            if (cb) { cb.checked = payload.eventType !== 'DELETE'; updateProgress(); }
+        }
+
         // -------- Threaded comments --------
         async function loadAllComments() {
             if (!sb) return {};
@@ -3219,14 +3276,6 @@
 
         // Load progress on page load
         window.addEventListener('load', async () => {
-            const saved = localStorage.getItem('gidf-progress');
-            if (saved) {
-                const progress = JSON.parse(saved);
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                checkboxes.forEach((cb, i) => {
-                    cb.checked = progress[i] || false;
-                });
-            }
             updateProgress();
 
             if (sb) setSyncStatus('connected', 'Connecting…');
@@ -3234,6 +3283,26 @@
 
             injectOrnaments();
             await injectClaimSlots();
+
+            // Load & apply completions from Supabase
+            if (sb) {
+                const completions = await loadAllCompletions();
+                applyCompletions(completions);
+                updateProgress();
+            }
+
+            // Wire checkbox → Supabase on every tick
+            document.addEventListener('change', e => {
+                const cb = e.target;
+                if (cb.type !== 'checkbox') return;
+                const item = cb.closest('.task-item');
+                if (!item) return;
+                const taskId = item.dataset.originalHash;
+                if (!taskId) return;
+                saveCompletion(taskId, cb.checked);
+                updateProgress();
+            });
+
             subscribeToClaimUpdates();
 
             // Wire edit toggle button
